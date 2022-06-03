@@ -1,0 +1,149 @@
+---
+title: "Predictive Modelling (linear Regression): Agricultural Production"
+output: html_notebook
+---
+
+## Load Libraries
+
+```{r message = F}
+library(tidyverse)
+library(tidymodels)
+library(data.table)
+library(DT)
+library(MASS)
+
+df <- read.csv("C:/Users/PC/Documents/R_4DS/NUMERIC_/AgricultureData/AgrcultureDataset.csv")
+
+glimpse(df)
+```
+
+
+## Data Inspection and Cleaning
+
+```{r}
+null_vars <- (sapply(df, function(x) sum(is.na(x))))
+t(data.frame(null_vars)) # No missing data
+
+## Remove Trailing White space 
+df$Season <- (sapply(df$Season, function(x) trimws(x)))
+
+## scales Area
+df$Scaled_Area <- scale(df$Area)
+```
+
+
+## Exploratory Data Analysis
+
+```{r}
+df_num <- df %>% 
+  select_if(is.numeric) %>% 
+  subset()
+
+par(mfrow= c(3,3))
+
+invisible(lapply(names(df_num), function(col_name) 
+  truehist(df_num[,col_name], main = paste("Histogram of ", col_name), xlab = NA)))
+```
+```{r echo = FALSE, message = FALSE}
+## Feature Eng
+library(mltools)
+library(caret)
+
+### Location to cocat bothe States and Districts
+df$Location <- paste(df$State_Name, df$District_Name, sep = "_")
+
+## Label Encode
+library(superml)
+
+lbl = LabelEncoder$new()
+ml_df$Location = lbl$fit_transform(ml_df$Location)
+
+## Others
+ml_df <- df %>% 
+  mutate(Production = as.integer(Production)) %>% 
+  mutate(Season = case_when(
+    Season == "Autumn" ~ 1,
+    Season == "Kharif" ~ 2,
+    Season == "Rabi" ~ 3,
+    Season == "Summer" ~ 4,
+    Season == "Whole Year" ~ 5,
+    TRUE ~ 6
+  )) %>% 
+  dplyr::select(-c("State_Name", "District_Name", "Area"))
+
+```
+
+```{r Label Encode}
+## 
+library(superml)
+
+lbl = LabelEncoder$new()
+ml_df$Location = lbl$fit_transform(ml_df$Location)
+```
+
+```{r One-Hot Encode}
+## 
+# library(mltools)
+# library(data.table)
+# 
+# ml_df <- ml_df %>% 
+#   mutate(Crop = as.factor(Crop))
+# 
+# ml_df <- data.table(ml_df)
+# 
+# newdata <- one_hot(ml_df)
+
+```
+
+```{r}
+## Train-Test
+n_split <- round(0.8 * nrow(ml_df))
+
+train_indices <- sample(1:nrow(ml_df), n_split)
+train_set <- df[train_indices, ]
+test_set <- df[-train_indices, ]
+```
+
+
+
+```{r}
+## Checking for Colinearity with new features
+library(corrgram)
+# corrgram(newdata, lower.panel=panel.shade, upper.panel=panel.cor)
+```
+
+## Model Fitting
+
+```{r}
+## Simple Linear Regression (+ it handles the Categorical Variables by default, -takes time to resolve)
+mdl <- lm(Production ~ ., data = train_set)
+
+summary(mdl)
+```
+
+
+## Model Evaluation
+
+```{r}
+## Checkingn for Residuals
+modelResiduals <- as.data.frame(residuals(mdl)) %>% 
+  ggplot(aes(residuals(mdl))) +
+  geom_histogram(fill='deepskyblue', color='black')
+```
+
+
+
+```{r Prediction}
+preds <- predict(model, test_set)
+
+## Compare
+modelEval <- cbind(test_set$Production, preds)
+colnames(modelEval) <- c('Actual', 'Predicted')
+modelEval <- as.data.frame(modelEval)
+```
+
+```{r Root Mean Square}
+mse <- mean((modelEval$Actual - modelEval$Predicted))
+rmse <- sqrt(mse)
+```
+
